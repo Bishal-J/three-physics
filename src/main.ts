@@ -2,10 +2,18 @@ import "./style.css";
 
 import * as THREE from "three";
 import GUI from "lil-gui";
-import { OrbitControls } from "three/examples/jsm/Addons.js";
+import { PointerLockControls } from "three/examples/jsm/Addons.js";
+import * as CANNON from "cannon-es";
 
 // Debug
 const gui = new GUI();
+
+// Creating World
+const world = new CANNON.World({
+  gravity: new CANNON.Vec3(0, -9.82, 0),
+  allowSleep: true,
+});
+world.broadphase = new CANNON.SAPBroadphase(world);
 
 // Canvas
 const canvas = document.querySelector("canvas.webgl") as HTMLCanvasElement;
@@ -13,22 +21,69 @@ const canvas = document.querySelector("canvas.webgl") as HTMLCanvasElement;
 // Scene
 const scene = new THREE.Scene();
 
+const sphereToUpdate: { mesh: THREE.Mesh; body: CANNON.Body }[] = [];
+
 // Sphere
-const sphereGeometry = new THREE.SphereGeometry(0.5, 16, 32);
-const sphereMaterial = new THREE.MeshStandardMaterial({
-  color: "#FFA55D",
-  metalness: 0.3,
-  roughness: 0.4,
+const shootSphere = () => {
+  const sphereShape = new CANNON.Sphere(0.5);
+  const body = new CANNON.Body({
+    mass: 2,
+    shape: sphereShape,
+  });
+
+  // Position sphere at camera position
+  const cameraDirection = new THREE.Vector3();
+  camera.getWorldDirection(cameraDirection);
+
+  const startPosition = new THREE.Vector3();
+  startPosition
+    .copy(camera.position)
+    .add(cameraDirection.clone().multiplyScalar(1)); // place slightly in front of camera
+
+  body.position.set(startPosition.x, startPosition.y, startPosition.z);
+  body.linearDamping = 0.1; // Less damping for more realistic projectile motion
+
+  // Apply velocity in the direction camera is facing
+  const shootVelocity = 20;
+  const velocity = new CANNON.Vec3(
+    cameraDirection.x * shootVelocity,
+    cameraDirection.y * shootVelocity,
+    cameraDirection.z * shootVelocity
+  );
+  body.velocity.set(velocity.x, velocity.y, velocity.z);
+
+  world.addBody(body);
+
+  // THREE.js Mesh
+  const sphereGeometry = new THREE.SphereGeometry(0.5, 16, 32);
+  const sphereMaterial = new THREE.MeshStandardMaterial({
+    color: "#FFA55D",
+    metalness: 0.3,
+    roughness: 0.4,
+  });
+  const mesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
+  mesh.castShadow = true;
+  scene.add(mesh);
+
+  sphereToUpdate.push({
+    mesh,
+    body,
+  });
+};
+
+// Plane Body
+const planeShape = new CANNON.Plane();
+const planeBody = new CANNON.Body({
+  type: CANNON.Body.STATIC,
+  shape: planeShape,
 });
-const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-sphere.position.y = 1;
-sphere.castShadow = true;
-scene.add(sphere);
+planeBody.quaternion.setFromEuler(-Math.PI * 0.5, 0, 0);
+world.addBody(planeBody);
 
 // Plane
-const planeGeometry = new THREE.PlaneGeometry(10, 10);
+const planeGeometry = new THREE.PlaneGeometry(2000, 2000);
 const planeMaterial = new THREE.MeshStandardMaterial({
-  color: "#BBD8A3",
+  color: "#81E7AF",
   metalness: 0.3,
   roughness: 0.4,
 });
@@ -66,7 +121,7 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   100
 );
-camera.position.set(-3, 3, 3);
+camera.position.set(0, 10, 0);
 scene.add(camera);
 
 window.addEventListener("resize", () => {
@@ -82,19 +137,61 @@ window.addEventListener("resize", () => {
 });
 
 // Controls
-const controls = new OrbitControls(camera, canvas);
-controls.enableDamping = true;
+const blocker = document.getElementById("blocker") as HTMLElement;
+const instructions = document.getElementById("instructions") as HTMLElement;
+const controls = new PointerLockControls(camera, canvas);
+
+instructions.addEventListener("click", () => {
+  controls.lock();
+});
+
+controls.addEventListener("lock", () => {
+  blocker.style.display = "none";
+  instructions.style.display = "none;";
+});
+
+controls.addEventListener("unlock", () => {
+  blocker.style.display = "block";
+  instructions.style.display = "";
+});
+
+// Shoot Sphere
+
+window.addEventListener("click", () => {
+  console.log("Entered", controls.isLocked);
+  if (controls.isLocked) {
+    shootSphere();
+  }
+});
+
+// Fog
+const fog = new THREE.Fog("#F2EFE7", 0, 200);
+scene.fog = fog;
 
 const renderer = new THREE.WebGLRenderer({
   canvas: canvas,
 });
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.setClearColor(scene.fog.color);
 renderer.setSize(sizes.width, sizes.height);
 renderer.render(scene, camera);
 
+const clock = new THREE.Clock();
+let oldElapsedTime = 0;
+
 const tick = () => {
-  controls.update();
+  const elapsedTime = clock.getElapsedTime();
+  const deltaTime = elapsedTime - oldElapsedTime;
+  oldElapsedTime = elapsedTime;
+
+  // Update Physics
+  world.step(1 / 60, deltaTime, 3);
+
+  for (const sphere of sphereToUpdate) {
+    sphere.mesh.position.copy(sphere.body.position);
+    sphere.mesh.quaternion.copy(sphere.body.quaternion);
+  }
 
   // Renderer
   renderer.render(scene, camera);
