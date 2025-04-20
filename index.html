@@ -5,21 +5,28 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Three Physics | Bishal</title>
+
+    <!-- Google Font -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
     <canvas class="webgl"></canvas>
 
-    <!-- Game Screen -->
+    <!-- Game Overlay -->
     <div id="blocker">
       <div id="instructions">
-        <p style="font-size: 36px">Click to play</p>
-        <br />
-        <p>
-          Move: WASD<br />
-          Jump: SPACE<br />
-          Look: MOUSE <br />
-          Shoot: Mouse Left
-        </p>
+        <h1>Click to Play</h1>
+        <div class="info">
+          <p><strong>Move:</strong> W A S D</p>
+          <p><strong>Jump:</strong> SPACE</p>
+          <p><strong>Look:</strong> MOUSE</p>
+          <p><strong>Shoot:</strong> LEFT CLICK</p>
+        </div>
       </div>
     </div>
 
